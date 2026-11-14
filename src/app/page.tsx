@@ -1,69 +1,127 @@
-import Image from "next/image";
+"use client";
+
+import Link from "next/link";
+import { useRef, useState } from "react";
+import { apiFetch } from "@/components/api";
+import { RunView, type StageRecord } from "@/components/RunView";
+import { DecisionChip } from "@/components/ui";
+import { SAMPLES } from "@/lib/samples";
 
 export default function Home() {
+  const [stages, setStages] = useState<Record<number, StageRecord>>({});
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [filename, setFilename] = useState("");
+  const [runId, setRunId] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [drag, setDrag] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  async function run(file: File) {
+    if (busy) return;
+    setBusy(true); setError(null); setRunId(null); setFilename(file.name);
+    setPdfUrl(URL.createObjectURL(file));
+    setStages({ 0: { stage: 0, status: "running" } });
+    setStartedAt(Date.now());
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await apiFetch("/api/process", { method: "POST", body: fd });
+      if (!res.ok || !res.body) {
+        const j = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(j.error ?? "Request failed");
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
+        for (const p of parts) {
+          const line = p.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          const e = JSON.parse(line.slice(6));
+          if (e.type === "stage") setStages((s) => ({ ...s, [e.stage]: e }));
+          else if (e.type === "run") setRunId(e.run_id);
+          else if (e.type === "error") setError(e.message);
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+      setStages((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v.status === "running" ? { ...v, status: "error" } : v])));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runSample(f: string) {
+    const blob = await (await fetch(`/samples/${f}`)).blob();
+    run(new File([blob], f, { type: "application/pdf" }));
+  }
+
+  const started = Object.keys(stages).length > 0;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
+      <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) run(f); }}
+          onClick={() => input.current?.click()}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition ${drag ? "border-indigo-500 bg-indigo-50" : "border-zinc-300 bg-white hover:border-zinc-400"} ${busy ? "pointer-events-none opacity-60" : ""}`}
+        >
+          <input ref={input} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) run(f); e.target.value = ""; }} />
+          <div className="text-base font-medium text-zinc-900">{busy ? "Processing…" : "Drop an invoice PDF here"}</div>
+          <div className="mt-1 text-sm text-zinc-500">or click to choose a file. Any vendor invoice works; the agent reads it, matches it and decides.</div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-zinc-900">Test invoices</h2>
+            <span className="text-xs text-zinc-500">Click to run. Download to inspect.</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {SAMPLES.map((s) => (
+              <div key={s.file} className="group flex items-start gap-2 rounded-lg border border-zinc-200 p-2 hover:border-indigo-300 hover:bg-indigo-50/40">
+                <button disabled={busy} onClick={() => runSample(s.file)} className="min-w-0 flex-1 text-left disabled:opacity-50" title={s.why}>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-zinc-900">{s.title}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
+                    <span className="truncate">{s.vendor}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5"><span className="text-[11px] text-zinc-400">expect</span><DecisionChip decision={s.expect} /><span className="font-mono text-[11px] text-zinc-400">{s.rule}</span></div>
+                </button>
+                <a href={`/samples/${s.file}`} download className="rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-white hover:text-zinc-700" title="Download PDF">↓</a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {started ? (
+        <>
+          {runId && !busy && (
+            <div className="mb-3 text-right text-xs text-zinc-500">
+              Saved as <Link className="font-mono text-indigo-600 hover:underline" href={`/runs/${runId}`}>{runId}</Link>
+            </div>
+          )}
+          <RunView stages={stages} pdfUrl={pdfUrl} filename={filename} runId={runId} startedAt={startedAt} error={error} />
+        </>
+      ) : (
+        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center">
+          <p className="text-lg font-medium text-zinc-900">An AP agent is not a reader. It is a decider.</p>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-zinc-600">
+            Every invoice goes through six visible stages and lands in one of four outcomes: Excellent, Good, Review Required or Reject.
+            A model reads the document; deterministic rules make the decision, and the rule that fired is named.
           </p>
+          <p className="mt-3 text-xs text-zinc-500">A payable invoice is legible, identified, matched, authorised and unique.</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+    </main>
   );
 }
