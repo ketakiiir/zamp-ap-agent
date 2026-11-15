@@ -153,8 +153,9 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
           const open = ((await sql`SELECT po_number, vendor_id, amount::float AS amount, tolerance_pct::float AS tolerance_pct, description FROM purchase_orders WHERE vendor_id = ${vendor.vendor_id} AND status = 'open'`) as PORow[]);
           const ref = normId(x.po_reference.value);
           if (ref) {
-            const exact = ((await sql`SELECT po_number, vendor_id, amount::float AS amount, tolerance_pct::float AS tolerance_pct, description FROM purchase_orders`) as PORow[]).find((p) => normId(p.po_number) === ref);
-            if (exact && exact.vendor_id === vendor.vendor_id) { po = exact; po_match = `Explicit reference ${exact.po_number} on the invoice.`; }
+            const exact = ((await sql`SELECT po_number, vendor_id, amount::float AS amount, tolerance_pct::float AS tolerance_pct, description, status FROM purchase_orders`) as (PORow & { status: string })[]).find((p) => normId(p.po_number) === ref);
+            if (exact && exact.vendor_id === vendor.vendor_id && exact.status !== "open") po_match = `Invoice cites ${exact.po_number}, but that PO is ${exact.status}, so nothing more can be billed against it.`;
+            else if (exact && exact.vendor_id === vendor.vendor_id) { po = exact; po_match = `Explicit reference ${exact.po_number} on the invoice.`; }
             else if (exact) po_match = `Invoice cites ${exact.po_number}, but that PO belongs to a different vendor.`;
             else po_match = `Invoice cites "${x.po_reference.value}", which does not exist in the PO system.${open.length ? "" : ` ${vendor.name} has no open POs.`}`;
           } else if (open.length === 1) {
@@ -227,13 +228,14 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
         audience = decision.rule === "R5" || decision.rule === "R3" ? "Procurement (internal)" : decision.rule === "R2" ? "AP (internal)" : "Vendor";
         const brief = [
           `From: Meadowgate Provisions accounts payable. To: ${audience === "Vendor" ? vendorName : audience}.`,
-          `Document: ${file.name}. Invoice number: ${x?.invoice_number.value ?? "unreadable"}. Total: ${x?.total.value ?? "unknown"}.`,
-          `Outcome: ${decision.decision} (${decision.rule}: ${decision.rule_text}).`,
+          `Invoice number: ${x?.invoice_number.value ?? "unreadable"}. Invoice date: ${x?.invoice_date.value ?? "unknown"}. Total: ${x?.total.value ?? "unknown"}. PO cited: ${x?.po_reference.value ?? "none"}.`,
+          `Outcome: ${decision.decision}.`,
           `Reason: ${decision.reason}`,
           decision.rule === "R2" && d?.by_fingerprint ? `Original invoice: ${d.by_fingerprint.invoice_number} dated ${d.by_fingerprint.invoice_date}.` : "",
           decision.rule === "R5" ? "Ask procurement to raise or link the PO. Make clear the vendor is not at fault." : "",
           decision.rule === "R4" ? "Ask the vendor to resend a clean copy with the unreadable field legible." : "",
           decision.rule === "R1" ? "Thank the sender and ask them to send the invoice itself." : "",
+          audience === "Vendor" ? "Do not mention file names, rule codes, scores, confidence or any internal system detail. Refer to the invoice by its number and date." : "",
         ].filter(Boolean).join("\n");
         const m = await draftMessage(brief);
         usages.push(m.usage);

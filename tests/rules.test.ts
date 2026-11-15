@@ -64,3 +64,13 @@ test("fingerprint ignores invoice number and date format, and catches resubmissi
   assert.equal(fingerprint("V-104", 8640, "2026-11-05", [6000, 2640]), fingerprint("V-104", 8640.0, "November 5, 2026", [2640, 6000]));
   assert.notEqual(fingerprint("V-104", 8640, "2026-11-05", [6000, 2640]), fingerprint("V-104", 8640, "2026-11-06", [6000, 2640]));
 });
+
+test("a line whose quantity x unit price does not equal its amount goes to a person (R6)", () => {
+  const x = inv(48500, { line_items: [{ description: "Linehaul", quantity: 2, unit_price: 20000, amount: 48500 }] });
+  const d = run(x, resolved(0));
+  assert.equal(d.rule, "R6"); assert.match(d.reason, /multiplies to/);
+});
+test("correct line maths still passes", () => {
+  const x = inv(48500, { line_items: [{ description: "Linehaul", quantity: 2, unit_price: 24250, amount: 48500 }] });
+  assert.equal(run(x, resolved(0)).rule, "R8");
+});

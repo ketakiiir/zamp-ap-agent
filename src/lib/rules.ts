@@ -29,7 +29,7 @@ export type ExtractedLite = {
   invoice_date: Field<string>;
   total: Field<number>;
   tax: Field<number>;
-  line_items: { amount: number | null }[];
+  line_items: { amount: number | null; quantity?: number | null; unit_price?: number | null; description?: string }[];
 };
 
 export type VendorRow = { vendor_id: string; name: string; status: string; email: string | null };
@@ -82,6 +82,13 @@ export function scoreMatched(x: ExtractedLite, r: ResolveResult): Scorer & { var
   }
   const total = x.total.value;
   if (total === null) return { ...base, verdict: "uncertain", evidence: "No total to match against the PO.", notes: [] };
+
+  const badLine = x.line_items.find((l) => l.quantity != null && l.unit_price != null && l.amount != null &&
+    Math.abs(l.quantity * l.unit_price - l.amount) > Math.max(0.01, Math.abs(l.amount) * 0.005));
+  if (badLine) {
+    const want = (badLine.quantity as number) * (badLine.unit_price as number);
+    return { ...base, verdict: "uncertain", evidence: `Line "${badLine.description ?? "item"}" says ${badLine.quantity} x ${money(badLine.unit_price as number)} = ${money(badLine.amount as number)}, but that multiplies to ${money(want)}.`, notes: [], variance: (badLine.amount as number) - want };
+  }
 
   const lineSum = x.line_items.reduce((s, l) => s + (l.amount ?? 0), 0) + (x.tax.value ?? 0);
   if (x.line_items.length && Math.abs(lineSum - total) > Math.max(1, total * 0.005)) {

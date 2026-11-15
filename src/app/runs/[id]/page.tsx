@@ -26,8 +26,8 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         <div className="mb-4 rounded-xl border border-zinc-200 bg-white p-3 text-sm">
           {reviews.map((v, i) => (
             <div key={i} className="text-zinc-700">
-              <b className="capitalize">{v.action}d</b> by reviewer {new Date(v.acted_at).toLocaleString()}
-              {v.edited_fields && Object.keys(v.edited_fields).length > 0 && <> · edited {Object.entries(v.edited_fields).map(([k, val]) => `${k.replace(/_/g, " ")} → ${val}`).join(", ")}</>}
+              <b className="capitalize">{v.action}d</b> by {v.edited_fields?.reviewer ?? "a reviewer"} on {new Date(v.acted_at).toLocaleString()}
+              {v.edited_fields && Object.keys(v.edited_fields).filter((k) => k !== "reviewer").length > 0 && <> · corrected {Object.entries(v.edited_fields).filter(([k]) => k !== "reviewer").map(([k, val]) => `${k.replace(/_/g, " ")} to ${val}`).join(", ")}</>}
               {v.reviewer_note && <> · “{v.reviewer_note}”</>}
             </div>
           ))}

@@ -61,13 +61,14 @@ function Detail({ item }: { item: QueueItem }) {
   const router = useRouter();
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
+  const [reviewer, setReviewer] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   async function act(action: "approve" | "reject") {
     setBusy(true); setErr("");
     const changed = Object.fromEntries(Object.entries(edits).filter(([k, v]) => v !== (item.fields.find((f) => f.key === k)?.value ?? "")));
-    const r = await apiFetch("/api/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: item.run_id, action, edited_fields: changed, note }) });
+    const r = await apiFetch("/api/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_id: item.run_id, action, edited_fields: changed, note, reviewer }) });
     setBusy(false);
     if (!r.ok) { setErr((await r.json()).error ?? "Failed"); return; }
     router.refresh();
@@ -117,7 +118,8 @@ function Detail({ item }: { item: QueueItem }) {
           </div>
         )}
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reviewer note (optional)" className="mb-3 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm" rows={2} />
+          <input id="reviewer-name" value={reviewer} onChange={(e) => setReviewer(e.target.value)} placeholder="Your name (recorded with the decision)" className="mb-2 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm" />
+          <textarea id="reviewer-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Reviewer note (optional)" className="mb-3 w-full rounded-md border border-zinc-300 px-2 py-1 text-sm" rows={2} />
           <div className="flex gap-2">
             <button disabled={busy} onClick={() => act("approve")} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">Approve</button>
             <button disabled={busy} onClick={() => act("reject")} className="rounded-md border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50">Reject</button>
