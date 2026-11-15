@@ -1,36 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/components/api";
-import { RunView, type StageRecord } from "@/components/RunView";
+import { RunView, VERDICT_COPY, type StageRecord } from "@/components/RunView";
 import { DecisionChip } from "@/components/ui";
 import { SAMPLES } from "@/lib/samples";
+import fixture from "@/lib/tour-fixture.json";
+
+const SCENARIO: Record<string, string> = {
+  "01-clean-invoice-A.pdf": "Everything matches",
+  "02-scanned-unreadable-number.pdf": "Blurry scan",
+  "03-split-po-40pct.pdf": "Billed in two parts",
+  "04-duplicate-new-number.pdf": "Sent twice",
+  "05-no-matching-po.pdf": "No purchase order",
+  "06-delivery-note.pdf": "Not an invoice",
+  "07-clean-invoice-B.pdf": "Everything matches (2)",
+};
 
 export default function Home() {
   const [stages, setStages] = useState<Record<number, StageRecord>>({});
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [filename, setFilename] = useState("");
   const [runId, setRunId] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [replay, setReplay] = useState(false);
   const [drag, setDrag] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const runRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { (window as any).__currentRunId = runId; }, [runId]);
+
+  // Guided tour: replay a real stored run, no API call and no cost.
+  useEffect(() => {
+    let cancelled = false;
+    const play = async () => {
+      setReplay(true); setError(null); setRunId(null);
+      setFilename(fixture.filename); setPdfUrl(fixture.pdf); setStages({});
+      const all = fixture.stages as unknown as Record<string, StageRecord>;
+      for (let i = 0; i <= 6 && !cancelled; i++) {
+        const rec = all[String(i)];
+        setStages((s) => ({ ...s, [i]: { stage: i, status: "running" } }));
+        await new Promise((r) => setTimeout(r, i === 2 ? 900 : 450));
+        setStages((s) => ({ ...s, [i]: rec }));
+      }
+    };
+    window.addEventListener("tour:replay", play);
+    return () => { cancelled = true; window.removeEventListener("tour:replay", play); };
+  }, []);
 
   async function run(file: File) {
     if (busy) return;
-    setBusy(true); setError(null); setRunId(null); setFilename(file.name);
+    setBusy(true); setReplay(false); setError(null); setRunId(null); setFilename(file.name);
     setPdfUrl(URL.createObjectURL(file));
     setStages({ 0: { stage: 0, status: "running" } });
-    setStartedAt(Date.now());
+    setTimeout(() => runRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     const fd = new FormData();
     fd.append("file", file);
     try {
       const res = await apiFetch("/api/process", { method: "POST", body: fd });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(j.error ?? "Request failed");
+        throw new Error(res.status === 401 ? "The demo passcode is needed to run an invoice. Enter it, then click the invoice again." : j.error ?? "Request failed");
       }
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -66,62 +98,88 @@ export default function Home() {
   const started = Object.keys(stages).length > 0;
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-      <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) run(f); }}
-          onClick={() => input.current?.click()}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition ${drag ? "border-indigo-500 bg-indigo-50" : "border-zinc-300 bg-white hover:border-zinc-400"} ${busy ? "pointer-events-none opacity-60" : ""}`}
-        >
-          <input ref={input} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) run(f); e.target.value = ""; }} />
-          <div className="text-base font-medium text-zinc-900">{busy ? "Processing…" : "Drop an invoice PDF here"}</div>
-          <div className="mt-1 text-sm text-zinc-500">or click to choose a file. Any vendor invoice works; the agent reads it, matches it and decides.</div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-zinc-900">Test invoices</h2>
-            <span className="text-xs text-zinc-500">Click to run. Download to inspect.</span>
+    <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-4 py-6">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Turn a supplier invoice into a decision, with every step shown</h1>
+        <p className="mt-1 max-w-3xl text-zinc-600">The agent reads the invoice, checks it against the purchase order, and decides: pay it, pay it with a note, ask a person, or reject it. People only see the invoices that need them.</p>
+        <ol className="mt-5 grid gap-3 sm:grid-cols-3">
+          {[
+            ["1", "Pick an invoice", "Click a test invoice below, or drop in your own PDF."],
+            ["2", "Watch it work", "Seven steps light up as they finish, about 10 to 15 seconds."],
+            ["3", "Read the decision", "Plain-English verdict, the reason, and what happens next."],
+          ].map(([n, t, d]) => (
+            <li key={n} className="flex gap-3 rounded-xl bg-zinc-50 p-3">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-indigo-600 text-sm font-semibold text-white">{n}</span>
+              <span><span className="block font-medium text-zinc-900">{t}</span><span className="block text-sm text-zinc-600">{d}</span></span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
+        <div data-tour="samples" className="rounded-2xl border border-zinc-200 bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold text-zinc-900">Try a test invoice</h2>
+            <span className="text-xs text-zinc-500">Each tests a different situation. Click one to run it live.</span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {SAMPLES.map((s) => (
-              <div key={s.file} className="group flex items-start gap-2 rounded-lg border border-zinc-200 p-2 hover:border-indigo-300 hover:bg-indigo-50/40">
-                <button disabled={busy} onClick={() => runSample(s.file)} className="min-w-0 flex-1 text-left disabled:opacity-50" title={s.why}>
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-zinc-900">{s.title}</span>
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
-                    <span className="truncate">{s.vendor}</span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-1.5"><span className="text-[11px] text-zinc-400">expect</span><DecisionChip decision={s.expect} /><span className="font-mono text-[11px] text-zinc-400">{s.rule}</span></div>
-                </button>
-                <a href={`/samples/${s.file}`} download className="rounded px-1.5 py-0.5 text-xs text-zinc-400 hover:bg-white hover:text-zinc-700" title="Download PDF">↓</a>
+              <div key={s.file} className="flex flex-col rounded-xl border border-zinc-200 p-3 transition hover:border-indigo-300 hover:shadow-sm">
+                <div className="text-sm font-semibold text-zinc-900">{SCENARIO[s.file]}</div>
+                <div className="text-xs text-zinc-500">{s.vendor}</div>
+                <p className="mt-1 flex-1 text-xs text-zinc-600">{s.why}</p>
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">Should end as <DecisionChip decision={s.expect} /></div>
+                <div className="mt-2 flex gap-2">
+                  <button disabled={busy} onClick={() => runSample(s.file)} className="flex-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">Run it</button>
+                  <a href={`/samples/${s.file}`} target="_blank" rel="noreferrer" className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50">View PDF</a>
+                </div>
               </div>
             ))}
           </div>
         </div>
+        <div
+          data-tour="upload"
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) run(f); }}
+          onClick={() => input.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") input.current?.click(); }}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition ${drag ? "border-indigo-500 bg-indigo-50" : "border-zinc-300 bg-white hover:border-indigo-300"} ${busy ? "pointer-events-none opacity-60" : ""}`}
+        >
+          <input ref={input} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) run(f); e.target.value = ""; }} />
+          <div className="text-3xl" aria-hidden>📄</div>
+          <div className="mt-2 font-semibold text-zinc-900">{busy ? "Processing…" : "Or drop your own invoice PDF"}</div>
+          <div className="mt-1 text-sm text-zinc-500">Click to choose a file. Any supplier invoice works.</div>
+        </div>
       </section>
 
-      {started ? (
-        <>
-          {runId && !busy && (
-            <div className="mb-3 text-right text-xs text-zinc-500">
-              Saved as <Link className="font-mono text-indigo-600 hover:underline" href={`/runs/${runId}`}>{runId}</Link>
+      <div ref={runRef} className="scroll-mt-24">
+        {started ? (
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">{busy ? "Processing" : stages[5]?.status === "done" ? "Result" : "Run"}: {filename}</h2>
+              {replay && <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700">Tour replay of a real run, no cost</span>}
+              {stages[5]?.status === "done" && !replay && (
+                <span className="text-xs text-zinc-500">{VERDICT_COPY[stages[5].output.decision]?.headline}</span>
+              )}
+              {runId && !busy && (
+                <span className="ml-auto flex gap-3 text-sm">
+                  <Link className="text-indigo-600 hover:underline" href={`/runs/${runId}`}>Open saved run</Link>
+                  <Link className="text-indigo-600 hover:underline" href="/queue">Go to review queue</Link>
+                </span>
+              )}
             </div>
-          )}
-          <RunView stages={stages} pdfUrl={pdfUrl} filename={filename} runId={runId} startedAt={startedAt} error={error} />
-        </>
-      ) : (
-        <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center">
-          <p className="text-lg font-medium text-zinc-900">An AP agent is not a reader. It is a decider.</p>
-          <p className="mx-auto mt-2 max-w-2xl text-sm text-zinc-600">
-            Every invoice goes through six visible stages and lands in one of four outcomes: Excellent, Good, Review Required or Reject.
-            A model reads the document; deterministic rules make the decision, and the rule that fired is named.
-          </p>
-          <p className="mt-3 text-xs text-zinc-500">A payable invoice is legible, identified, matched, authorised and unique.</p>
-        </div>
-      )}
+            <RunView stages={stages} pdfUrl={pdfUrl} filename={filename} runId={runId} error={error} />
+          </section>
+        ) : (
+          <section className="rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
+            The live view of the agent at work will appear here when you run an invoice.
+            <button onClick={() => window.dispatchEvent(new Event("tour:start"))} className="ml-1 font-medium text-indigo-600 hover:underline">New here? Take the one-minute tour.</button>
+          </section>
+        )}
+      </div>
     </main>
   );
 }

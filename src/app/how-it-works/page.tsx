@@ -66,7 +66,7 @@ export default function HowItWorks() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Decision rules (first match wins)</h2>
+        <h2 id="rules" className="mb-3 scroll-mt-24 text-lg font-semibold">Decision rules (first match wins)</h2>
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
             <thead className="bg-zinc-50 text-xs text-zinc-500"><tr><th className="px-3 py-2">Rule</th><th className="px-3 py-2">Condition</th><th className="px-3 py-2">Outcome</th><th className="px-3 py-2">Routed to</th></tr></thead>

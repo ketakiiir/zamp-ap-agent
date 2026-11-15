@@ -27,9 +27,9 @@ export default async function QueuePage() {
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-6">
       <div>
         <h1 className="text-xl font-semibold">Review queue</h1>
-        <p className="text-sm text-zinc-500">Sorted by amount at risk, not arrival time. Fix what the agent could not read, then approve or reject in one click.</p>
+        <p className="text-sm text-zinc-500">Invoices waiting for a person, biggest amount first. Pick one on the left, check the flagged fields against the document, correct anything the agent could not read, then approve or reject.</p>
       </div>
-      <QueueList items={items} />
+      <div data-tour="queue"><QueueList items={items} /></div>
     </main>
   );
 }

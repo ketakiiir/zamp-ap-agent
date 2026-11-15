@@ -8,8 +8,12 @@ export function getPasscode(): string {
 export function setPasscode(v: string) {
   try { localStorage.setItem(KEY, v); } catch { /* ignore */ }
 }
-export function apiFetch(path: string, init: RequestInit = {}) {
+
+/** Fetch with the demo passcode. On 401, asks the global passcode dialog to open. */
+export async function apiFetch(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("x-demo-passcode", getPasscode());
-  return fetch(path, { ...init, headers });
+  const res = await fetch(path, { ...init, headers });
+  if (res.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event("need-passcode"));
+  return res;
 }

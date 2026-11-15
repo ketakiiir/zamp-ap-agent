@@ -1,0 +1,239 @@
+{
+ "filename": "01-clean-invoice-A.pdf",
+ "pdf": "/samples/01-clean-invoice-A.pdf",
+ "stages": {
+  "0": {
+   "ms": 132,
+   "stage": 0,
+   "output": {
+    "bytes": 63532,
+    "run_id": "run_mwgtnwfkjw2z",
+    "blob_url": "https://annpfecen0pvaffy.public.blob.vercel-storage.com/invoices/run_mwgtnwfkjw2z-01-clean-invoice-A.pdf"
+   },
+   "status": "done",
+   "summary": "Stored in Blob, run opened"
+  },
+  "1": {
+   "ms": 2576,
+   "stage": 1,
+   "output": {
+    "pages": 1,
+    "cost_usd": 0.002726,
+    "is_invoice": true,
+    "vendor_hint": "Larkspur Valley Produce LLC",
+    "document_type": "invoice",
+    "quality_score": 0.95,
+    "has_text_layer": true,
+    "legibility_notes": "Clean digital PDF with clear formatting, professional layout, and fully legible text throughout; no visible scan artifacts, skew, or smudges."
+   },
+   "status": "done",
+   "summary": "Invoice. Quality 0.95, text layer present."
+  },
+  "2": {
+   "ms": 10920,
+   "stage": 2,
+   "output": {
+    "tax": {
+     "value": 0,
+     "confidence": 0.99,
+     "source_text": "0.00"
+    },
+    "notes": "Line items sum to 11,340.00 matching the subtotal and total; no sales tax applied. Payment terms Net 30, ACH to account ending 4417.",
+    "total": {
+     "value": 11340,
+     "confidence": 0.99,
+     "source_text": "USD 11,340.00"
+    },
+    "currency": {
+     "value": "USD",
+     "confidence": 0.99,
+     "source_text": "USD 11,340.00"
+    },
+    "due_date": {
+     "value": "2026-12-10",
+     "confidence": 0.99,
+     "source_text": "10 December 2026"
+    },
+    "subtotal": {
+     "value": 11340,
+     "confidence": 0.99,
+     "source_text": "11,340.00"
+    },
+    "line_items": [
+     {
+      "amount": 3780,
+      "quantity": 120,
+      "confidence": 0.99,
+      "unit_price": 31.5,
+      "description": "Romaine hearts, 24 ct case"
+     },
+     {
+      "amount": 2520,
+      "quantity": 90,
+      "confidence": 0.99,
+      "unit_price": 28,
+      "description": "Roma tomatoes, 25 lb case"
+     },
+     {
+      "amount": 1320,
+      "quantity": 60,
+      "confidence": 0.99,
+      "unit_price": 22,
+      "description": "Yellow onions, 50 lb sack"
+     },
+     {
+      "amount": 3720,
+      "quantity": 80,
+      "confidence": 0.99,
+      "unit_price": 46.5,
+      "description": "Gala apples, 40 lb case"
+     }
+    ],
+    "vendor_name": {
+     "value": "Larkspur Valley Produce LLC",
+     "confidence": 0.99,
+     "source_text": "Larkspur Valley Produce LLC"
+    },
+    "invoice_date": {
+     "value": "2026-11-10",
+     "confidence": 0.99,
+     "source_text": "10 November 2026"
+    },
+    "po_reference": {
+     "value": "PO-4501",
+     "confidence": 0.99,
+     "source_text": "PO-4501"
+    },
+    "vendor_tax_id": {
+     "value": "84-2217731",
+     "confidence": 0.98,
+     "source_text": "Tax ID 84-2217731"
+    },
+    "invoice_number": {
+     "value": "LVP-30417",
+     "confidence": 0.99,
+     "source_text": "LVP-30417"
+    }
+   },
+   "status": "done",
+   "summary": "4 line items, total 11340."
+  },
+  "3": {
+   "ms": 21,
+   "stage": 3,
+   "output": {
+    "po": {
+     "amount": 11340,
+     "po_number": "PO-4501",
+     "vendor_id": "V-101",
+     "description": "Weekly fresh produce, hospital accounts",
+     "tolerance_pct": 2
+    },
+    "vendor": {
+     "name": "Larkspur Valley Produce",
+     "email": "billing@larkspurvalley.example",
+     "status": "approved",
+     "vendor_id": "V-101"
+    },
+    "po_match": "Explicit reference PO-4501 on the invoice.",
+    "remaining": 11340,
+    "candidates": [
+     {
+      "why": "Weekly fresh produce, hospital accounts",
+      "score": 1,
+      "amount": 11340,
+      "po_number": "PO-4501"
+     }
+    ],
+    "prior_on_po": [],
+    "prior_total": 0,
+    "vendor_match": "matched on tax id 84-2217731"
+   },
+   "status": "done",
+   "summary": "Larkspur Valley Produce. PO-4501, 11340.00 remaining."
+  },
+  "4": {
+   "ms": 32,
+   "stage": 4,
+   "output": [
+    {
+     "key": "legible",
+     "label": "Legible",
+     "notes": [],
+     "verdict": "pass",
+     "evidence": "Quality 0.95. Digital PDF with a text layer."
+    },
+    {
+     "key": "identified",
+     "label": "Identified",
+     "notes": [],
+     "verdict": "pass",
+     "evidence": "Invoice LVP-30417, dated 2026-11-10, total $11,340.00. Lowest field confidence 0.99."
+    },
+    {
+     "key": "matched",
+     "label": "Matched",
+     "notes": [],
+     "verdict": "pass",
+     "evidence": "PO-4501 ($11,340.00). Invoice $11,340.00 fits."
+    },
+    {
+     "key": "authorised",
+     "label": "Authorised + Unique",
+     "notes": [],
+     "verdict": "pass",
+     "evidence": "Larkspur Valley Produce is approved (matched on tax id 84-2217731). No fingerprint collision."
+    }
+   ],
+   "status": "done",
+   "summary": "Legible: pass · Identified: pass · Matched: pass · Authorised + Unique: pass"
+  },
+  "5": {
+   "ms": 0,
+   "stage": 5,
+   "output": {
+    "rule": "R8",
+    "reason": "All four checks pass with no notes. Auto-approve is off, so it goes to the one-click approve queue.",
+    "decision": "Excellent",
+    "settings": {
+     "auto_approve": false,
+     "confidence_threshold": 0.95
+    },
+    "routed_to": "One-click approve queue",
+    "rule_text": "All pass, no notes",
+    "confidence": 0.99,
+    "auto_approved": false
+   },
+   "status": "done",
+   "summary": "Excellent by R8. One-click approve queue."
+  },
+  "6": {
+   "ms": 10,
+   "stage": 6,
+   "output": {
+    "audit": "Rule R8 fired. All four checks pass with no notes. Auto-approve is off, so it goes to the one-click approve queue.",
+    "draft": null,
+    "usages": [
+     {
+      "model": "claude-haiku-4-5",
+      "cost_usd": 0.002726,
+      "input_tokens": 2326,
+      "output_tokens": 80
+     },
+     {
+      "model": "claude-opus-5",
+      "cost_usd": 0.03487,
+      "input_tokens": 3529,
+      "output_tokens": 689
+     }
+    ],
+    "audience": "none",
+    "cost_usd": 0.037596,
+    "routed_to": "One-click approve queue",
+    "review_state": "pending"
+   },
+   "status": "done",
+   "summary": "Routed to One-click approve queue."
+  }
+ }
+}
