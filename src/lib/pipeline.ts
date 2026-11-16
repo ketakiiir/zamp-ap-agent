@@ -30,7 +30,9 @@ const norm = (s: string | null | undefined) =>
   (s ?? "").toLowerCase().replace(/&/g, " and ").replace(/\b(llc|inc|ltd|co|corp|company|limited|the)\b/g, "").replace(/[^a-z0-9]/g, "");
 const normId = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-export async function runPipeline(file: { name: string; bytes: Uint8Array }, send: (e: RunEvent) => void) {
+export type RunSource = { source: "upload" | "email"; sender?: string | null; subject?: string | null; message_ref?: string | null; thread_id?: string | null };
+
+export async function runPipeline(file: { name: string; bytes: Uint8Array }, send: (e: RunEvent) => void, src: RunSource = { source: "upload" }) {
   const t0 = Date.now();
   const runId = `run_${t0.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const usages: Usage[] = [];
@@ -69,9 +71,11 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
   } catch (e) {
     console.warn("Blob upload skipped:", (e as Error).message);
   }
-  await sql`INSERT INTO runs (run_id, blob_url, filename, status) VALUES (${runId}, ${blobUrl}, ${file.name}, 'running')`;
+  await sql`INSERT INTO runs (run_id, blob_url, filename, status, source, sender, subject, message_ref, thread_id)
+    VALUES (${runId}, ${blobUrl}, ${file.name}, 'running', ${src.source}, ${src.sender ?? null}, ${src.subject ?? null}, ${src.message_ref ?? null}, ${src.thread_id ?? null})`;
   send({ type: "run", run_id: runId, filename: file.name, blob_url: blobUrl });
-  await record({ stage: 0, status: "done", ms: Date.now() - s0, summary: blobUrl ? "Stored in Blob, run opened" : "Run opened (blob storage unavailable)", output: { run_id: runId, blob_url: blobUrl, bytes: file.bytes.length } });
+  const via = src.source === "email" ? `Arrived by email from ${src.sender ?? "unknown sender"}. ` : "";
+  await record({ stage: 0, status: "done", ms: Date.now() - s0, summary: `${via}${blobUrl ? "PDF stored, case opened" : "Case opened (storage unavailable)"}`, output: { run_id: runId, blob_url: blobUrl, bytes: file.bytes.length, source: src.source, sender: src.sender ?? null, subject: src.subject ?? null } });
 
   try {
     const b64 = Buffer.from(file.bytes).toString("base64");

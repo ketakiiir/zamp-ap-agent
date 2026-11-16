@@ -30,6 +30,13 @@ async function init() {
     routed_to text, reason text, vendor_name text, invoice_number text, amount numeric(12,2),
     amount_at_risk numeric(12,2), auto_approved boolean DEFAULT false, review_state text,
     cost_usd numeric(10,5), ms_total integer, created_at timestamptz DEFAULT now())`;
+  // Email intake: where each run came from. Added after launch, so ALTER rather than CREATE.
+  await sql`ALTER TABLE runs ADD COLUMN IF NOT EXISTS source text DEFAULT 'upload'`;
+  await sql`ALTER TABLE runs ADD COLUMN IF NOT EXISTS sender text`;
+  await sql`ALTER TABLE runs ADD COLUMN IF NOT EXISTS subject text`;
+  await sql`ALTER TABLE runs ADD COLUMN IF NOT EXISTS message_ref text`;
+  await sql`ALTER TABLE runs ADD COLUMN IF NOT EXISTS thread_id text`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS runs_message_ref_idx ON runs (message_ref) WHERE message_ref IS NOT NULL`;
   await sql`CREATE TABLE IF NOT EXISTS reviews (
     id serial PRIMARY KEY, run_id text NOT NULL, action text NOT NULL, edited_fields jsonb,
     reviewer_note text, acted_at timestamptz DEFAULT now())`;

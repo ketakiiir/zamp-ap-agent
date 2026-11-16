@@ -16,6 +16,7 @@ type Step = {
 
 const STEPS: Step[] = [
   { page: "/", title: "Welcome to the AP invoice agent", body: "Suppliers send invoices. Someone in accounts payable has to check each one against the purchase order and decide whether to pay it. This agent does that check, shows every step, and hands people only the invoices that need them. This tour takes about a minute and costs nothing to run." },
+  { page: "/", target: '[data-tour="inbox"]', title: "Invoices arrive by email", body: "Suppliers email their invoices as PDFs to the AP inbox, with \"Invoice\" in the subject. Each one appears here and runs through the agent by itself, and a reply is drafted in the email thread for a person to send." },
   { page: "/", target: '[data-tour="samples"]', title: "Seven ready-made test invoices", body: "Each one tests a different real-world situation: a clean invoice, a blurry scan, a duplicate, a missing purchase order, and more. The label shows what the agent should decide." },
   { page: "/", target: '[data-tour="upload"]', title: "Or bring your own", body: "Drop any invoice PDF here. It goes through exactly the same steps as the test invoices." },
   { page: "/", target: '[data-tour="stepper"]', event: "tour:replay", wait: 4000, title: "Watch an invoice being processed", body: "This is a replay of a real run of the clean test invoice. Each step lights up as it finishes. A live run takes about 10 to 15 seconds." },
