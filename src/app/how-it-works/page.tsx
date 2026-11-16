@@ -4,7 +4,8 @@ import { SAMPLES } from "@/lib/samples";
 import { DecisionChip, money } from "@/components/ui";
 
 const PIPE = [
-  { n: 0, name: "Upload", what: "PDF stored, run opened", model: null },
+  { n: 0, name: "Email arrives", what: "Mailbox script forwards the PDF", model: null },
+  { n: 0, name: "Receive", what: "PDF stored, run opened", model: null },
   { n: 1, name: "Triage", what: "Invoice or not? Legible?", model: "Haiku" },
   { n: 2, name: "Extract", what: "Fields + confidence + source text", model: "Opus" },
   { n: 3, name: "Resolve", what: "Vendor, PO, prior invoices", model: null },
@@ -102,15 +103,20 @@ export default function HowItWorks() {
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <h2 className="mb-2 font-semibold">Assumptions</h2>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-700">
-            <li>Auto-approve ships switched off. An agent that is right 95% of the time still should not release money on day one; it is turned on deliberately, with a high confidence gate, after watching it run.</li>
-            <li>Duplicates are caught by fingerprint (vendor, total, date, line amounts), not invoice number, because a resubmission usually carries a fresh number.</li>
-            <li>A split PO is judged against the cumulative balance: prior non-rejected invoices on the same PO are subtracted first.</li>
-            <li>No matching PO is our data gap, so it goes to procurement, not back to the vendor.</li>
-            <li>An unknown or suspended vendor is rejected to procurement for onboarding, whatever the numbers say.</li>
-            <li>Manual baseline: 4 minutes per invoice. Stated, not measured.</li>
-            <li>All companies, people and numbers are invented for this demo.</li>
-          </ul>
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-zinc-700">
+            <li>The company, suppliers, invoices and numbers are invented: Meadowgate Provisions, a mid-size food distributor.</li>
+            <li>Invoices arrive by email as PDFs to one AP inbox, with &quot;Invoice&quot; in the subject. Other email is ignored. Upload and the test buttons run the same steps.</li>
+            <li>Buying is against purchase orders. An invoice with no matching PO is our data gap, so it goes to procurement, not the supplier.</li>
+            <li>The approved supplier list is the source of truth. Unknown or suspended suppliers are rejected to procurement, whatever the numbers say.</li>
+            <li>Each PO has a tolerance (1 to 2% here) for small differences.</li>
+            <li>A duplicate is the same bill, not the same number: same supplier, total, date and line amounts.</li>
+            <li>A PO can be billed in parts; an invoice is judged against what is left on the PO.</li>
+            <li>Auto-approve ships switched off, behind a high confidence bar.</li>
+            <li>The agent drafts emails; a person sends them.</li>
+            <li>Manual baseline: about 4 minutes per invoice. Stated, not measured.</li>
+          </ol>
+          <h3 className="mt-3 text-sm font-semibold">Not covered yet</h3>
+          <p className="text-sm text-zinc-700">Checking the invoice is addressed to us, currency against the PO, tax-inclusive pricing, credit notes, and several invoices in one PDF.</p>
         </div>
       </section>
     </main>

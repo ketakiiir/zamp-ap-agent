@@ -10,6 +10,8 @@ All companies, people and numbers in this repo are invented.
 
 ## What it does
 
+Invoices arrive by email: a supplier sends a PDF to the AP inbox with "Invoice" in the subject. A Google Apps Script in the mailbox forwards it to `/api/inbound` (shared secret, subject template, PDF check, de-duplicated per email), the app acknowledges at once and processes it in the background, and a reply is saved as a Gmail draft for a person to send. Upload and the test buttons run the same pipeline.
+
 Every invoice goes through seven steps that stream live to the screen:
 
 | # | Step | How |
