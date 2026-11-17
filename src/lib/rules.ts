@@ -152,6 +152,8 @@ export function decide(opts: {
   minConfidence: number;
   autoApprove: boolean;
   autoThreshold: number;
+  /** The reading model errored. Our failure, never the supplier's: always a person, never a Reject. */
+  extractionFailed?: boolean;
 }): DecisionResult {
   const r = (id: string) => RULES.find((x) => x.id === id)!;
   const mk = (id: string, reason: string, confidence: number, routed?: string, auto = false): DecisionResult => ({
@@ -159,6 +161,9 @@ export function decide(opts: {
   });
 
   if (!opts.isInvoice) return mk("R1", `This is a ${opts.docType.replace("_", " ")}, not an invoice. Extraction and matching were skipped.`, 0.95, "Sender");
+  if (opts.extractionFailed) {
+    return mk("R4", "The document could not be read automatically, so supplier, PO and duplicate checks were not run on empty data. A person needs to key it in.", 0, "AP, read failed");
+  }
 
   const s = Object.fromEntries(opts.scorers.map((x) => [x.key, x])) as Record<Scorer["key"], Scorer>;
   const conf = opts.minConfidence;

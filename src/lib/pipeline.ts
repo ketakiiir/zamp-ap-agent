@@ -106,6 +106,7 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
     let extraction: Extraction | null = null;
     let resolve: ResolveResult | null = null;
     let dup: DupResult | null = null;
+    let extractionFailed = false;
 
     if (!tri.is_invoice) {
       for (const n of [2, 3, 4]) await record({ stage: n, status: "skipped", summary: "Skipped: triage rejected the document before the expensive model ran." });
@@ -119,6 +120,7 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
           extraction = r.extraction;
         } catch (e) {
           // Never crash on a bad read: an empty, zero-confidence record routes to a human via R4.
+          extractionFailed = true;
           const f = { value: null, confidence: 0, source_text: null };
           extraction = {
             vendor_name: { ...f, value: tri.vendor_hint }, vendor_tax_id: f, invoice_number: f, invoice_date: f, due_date: f,
@@ -192,7 +194,8 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
         const fp = fingerprint(r.vendor?.vendor_id ?? norm(x.vendor_name.value), x.total.value ?? 0, normaliseDate(x.invoice_date.value ?? ""), x.line_items.map((l) => l.amount ?? 0));
         let by_fingerprint: PriorInvoice | null = null;
         let by_number: PriorInvoice | null = null;
-        if (r.vendor) {
+        // A failed read has no real fields: matching it against the ledger would only produce false duplicates.
+        if (r.vendor && !extractionFailed) {
           const prior = (await sql`SELECT invoice_id, invoice_number, invoice_date, total::float AS total, run_id, po_number, fingerprint FROM invoices WHERE vendor_id = ${r.vendor.vendor_id} AND decision <> 'Reject'`) as (PriorInvoice & { fingerprint: string })[];
           by_fingerprint = prior.find((p) => p.fingerprint === fp) ?? null;
           const num = normId(x.invoice_number.value);
@@ -217,7 +220,7 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
     const decision = await timed(5, async () => {
       const d = decide({
         isInvoice: tri.is_invoice, docType: tri.document_type, scorers, minConfidence,
-        autoApprove: settings.auto_approve, autoThreshold: settings.confidence_threshold,
+        autoApprove: settings.auto_approve, autoThreshold: settings.confidence_threshold, extractionFailed,
       });
       return { out: { ...d, settings }, summary: `${d.decision} by ${d.rule}. ${d.routed_to}.` };
     });
@@ -228,7 +231,10 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
       const vendorName = resolve?.vendor?.name ?? x?.vendor_name.value ?? tri.vendor_hint ?? "the sender";
       let draft: string | null = null;
       let audience = "none";
-      if (decision.decision === "Reject" || decision.decision === "Review Required") {
+      let draftError: string | null = null;
+      if (extractionFailed) {
+        audience = "AP (internal)";
+      } else if (decision.decision === "Reject" || decision.decision === "Review Required") {
         audience = decision.rule === "R5" || decision.rule === "R3" ? "Procurement (internal)" : decision.rule === "R2" ? "AP (internal)" : "Vendor";
         const brief = [
           `From: Meadowgate Provisions accounts payable. To: ${audience === "Vendor" ? vendorName : audience}.`,
@@ -241,16 +247,21 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
           decision.rule === "R1" ? "Thank the sender and ask them to send the invoice itself." : "",
           audience === "Vendor" ? "Do not mention file names, rule codes, scores, confidence or any internal system detail. Refer to the invoice by its number and date." : "",
         ].filter(Boolean).join("\n");
-        const m = await draftMessage(brief);
-        usages.push(m.usage);
-        draft = m.text;
+        // The decision is already made. A failed courtesy note must not throw it away.
+        try {
+          const m = await draftMessage(brief);
+          usages.push(m.usage);
+          draft = m.text;
+        } catch (e) {
+          draftError = (e as Error).message;
+        }
       }
       const amount = x?.total.value ?? null;
       const atRisk = decision.decision === "Reject" ? 0 : amount ?? 0;
       const reviewState = decision.auto_approved ? "auto_approved" : decision.decision === "Reject" ? "closed" : "pending";
 
       if (tri.is_invoice && x) {
-        const fp = d?.fingerprint ?? null;
+        const fp = extractionFailed ? null : d?.fingerprint ?? null;
         await sql`INSERT INTO invoices (invoice_id, run_id, po_number, vendor_id, invoice_number, invoice_date, total, fingerprint, decision)
           VALUES (${`inv_${runId}`}, ${runId}, ${resolve?.po?.po_number ?? null}, ${resolve?.vendor?.vendor_id ?? null}, ${x.invoice_number.value}, ${x.invoice_date.value}, ${amount}, ${fp}, ${decision.decision})`;
       }
@@ -259,8 +270,9 @@ export async function runPipeline(file: { name: string; bytes: Uint8Array }, sen
         routed_to = ${decision.routed_to}, reason = ${decision.reason}, vendor_name = ${vendorName}, invoice_number = ${x?.invoice_number.value ?? null},
         amount = ${amount}, amount_at_risk = ${atRisk}, auto_approved = ${decision.auto_approved}, review_state = ${reviewState},
         cost_usd = ${cost()}, ms_total = ${msTotal} WHERE run_id = ${runId}`;
-      const out = { routed_to: decision.routed_to, audience, draft, review_state: reviewState, cost_usd: cost(), usages, audit: `Rule ${decision.rule} fired. ${decision.reason}` };
-      return { out, summary: decision.auto_approved ? "Auto-approved and logged." : `Routed to ${decision.routed_to}.${draft ? " Message drafted." : ""}` };
+      const out = { routed_to: decision.routed_to, audience, draft, draft_error: draftError, review_state: reviewState, cost_usd: cost(), usages, audit: `Rule ${decision.rule} fired. ${decision.reason}` };
+      const noteLine = draft ? " Message drafted." : draftError ? " Note could not be drafted; write it by hand." : "";
+      return { out, summary: decision.auto_approved ? "Auto-approved and logged." : `Routed to ${decision.routed_to}.${noteLine}` };
     });
 
     send({ type: "done", run_id: runId, decision: decision.decision, rule: decision.rule, ms_total: Date.now() - t0, cost_usd: final.cost_usd });

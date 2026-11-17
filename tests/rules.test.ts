@@ -74,3 +74,10 @@ test("correct line maths still passes", () => {
   const x = inv(48500, { line_items: [{ description: "Linehaul", quantity: 2, unit_price: 24250, amount: 48500 }] });
   assert.equal(run(x, resolved(0)).rule, "R8");
 });
+test("a failed read is R4 to a person, never a Reject, even with an unknown supplier", () => {
+  const empty = inv(0, { vendor_name: f(null, 0), invoice_number: f(null, 0), invoice_date: f(null, 0), total: f(null, 0), line_items: [] });
+  const unknown = resolved(0, { vendor: null, po: null, remaining: null });
+  const d = decide({ isInvoice: true, docType: "invoice", minConfidence: 0, autoApprove: true, autoThreshold: 0.95, extractionFailed: true,
+    scorers: [scoreLegible(0.95, true, ""), scoreIdentified(empty), scoreMatched(empty, unknown), scoreAuthorised(unknown, noDup)] });
+  assert.equal(d.decision, "Review Required"); assert.equal(d.rule, "R4"); assert.equal(d.auto_approved, false);
+});
